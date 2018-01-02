@@ -6,7 +6,7 @@ import cv2
 import imageio
 import numpy as np
 from matplotlib import pyplot as plt
-
+import time as t
 import tensorflow as tf
 
 # This is needed since the notebook is stored in the object_detection folder.
@@ -16,39 +16,47 @@ from utils import label_map_util
 from utils import visualization_utils as vis_util
 
 
-def optimize_image(img, x_start_stop, y_start_stop):
+def optimize_image(img, x_boundary, y_boundary, scale_factor):
     """
     define ROI in the image
     crop ROI
     """
+    is_debug_enabled = False
+
+    # original image dimensions
+    if is_debug_enabled:
+        print("original dim: ", img.shape)
 
     # reduce dimensions
     img = cv2.resize(img, None,
-                     fx=0.3, fy=0.3,
+                     fx=scale_factor, fy=scale_factor,
                      interpolation=cv2.INTER_LINEAR)
-    # crop ROI
-    img = cv2.rectangle(img,
-                        (x_start_stop[0], y_start_stop[0]),
-                        (x_start_stop[1], y_start_stop[1]),
-                        color=(0, 0, 255),
-                        thickness=3)
-    height = abs(y_start_stop[1] - y_start_stop[0])
-    width = abs(x_start_stop[1] - x_start_stop[0])
 
+    if is_debug_enabled:
+        img = cv2.rectangle(img,
+                            (x_boundary[0], y_boundary[0]),
+                            (x_boundary[1], y_boundary[1]),
+                            color=(0, 0, 255),
+                            thickness=3)
+
+    # crop ROI
+    height = abs(y_boundary[1] - y_boundary[0])
+    width = abs(x_boundary[1] - x_boundary[0])
     img = img[
-          int(y_start_stop[0]):int(y_start_stop[0] + height),
-          int(x_start_stop[0]):int(x_start_stop[0] + width)
+          int(y_boundary[0]):int(y_boundary[0] + height),
+          int(x_boundary[0]):int(x_boundary[0] + width)
           ]
 
-    is_debug_enabled = False
+    # cropped image dimensions
     if is_debug_enabled:
+        print("dimension: {}".format(img.shape))
         cv2.imshow("image", img)
         cv2.waitKey()
 
     return img
 
 
-def detect_object(image_np, sess, detection_graph, xy_start, category_index):
+def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, scale_factor):
     """
     get optimized image
     detect bounding boxes with scores
@@ -59,7 +67,7 @@ def detect_object(image_np, sess, detection_graph, xy_start, category_index):
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
 
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-    image_np = optimize_image(image_np, xy_start[0], xy_start[1])
+    image_np = optimize_image(image_np, xy_boundary[0], xy_boundary[1], scale_factor)
     image_np_expanded = np.expand_dims(image_np, axis=0)
 
     # Each box represents a part of the image where a particular object was detected.
@@ -71,7 +79,7 @@ def detect_object(image_np, sess, detection_graph, xy_start, category_index):
     detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
     num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 
-    # Actual detection.
+    # Actual detection
     (boxes, scores, classes, num) = sess.run([detection_boxes, detection_scores, detection_classes, num_detections],
                                              feed_dict={image_tensor: image_np_expanded})
 
@@ -88,20 +96,22 @@ def detect_object(image_np, sess, detection_graph, xy_start, category_index):
     return image_np
 
 
-def worker(input_q, output_q, path_to_check_point, xy_start, category_index):
+def worker(input_q, output_q, path_to_check_point, xy_boundary, category_index, scale_factor):
     detection_graph = tf.Graph()
+    # runs only once
     with detection_graph.as_default():
         od_graph_def = tf.GraphDef()
         with tf.gfile.GFile(path_to_check_point, 'rb') as fid:
             serialized_graph = fid.read()
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')
-
         sess = tf.Session(graph=detection_graph)
 
     while True:
         frame = input_q.get()
-        output_q.put(detect_object(frame, sess, detection_graph, xy_start, category_index))
+
+        # takes around 190 ms for image with dimension (1280, 720, 3)
+        output_q.put(detect_object(frame, sess, detection_graph, xy_boundary, category_index, scale_factor))
 
     sess.close()
 
@@ -120,12 +130,17 @@ def __main__():
     # List of the strings that is used to add correct label for each box.
     path_to_labels = os.path.join('data', 'mscoco_label_map.pbtxt')
 
-    num_classes = 1
-    x_boundary = (0, 630)
-    y_boundary = (120, 280)
-    xy_start = x_boundary, y_boundary
+    num_classes = 90
 
-    # directory if images/videos
+    # resolution -- has impact on inference time
+    scale_factor = 0.5
+
+    # ROI -- has impact on inference time
+    x_boundary = (5 * scale_factor, 1270 * scale_factor)
+    y_boundary = (380 * scale_factor, 640 * scale_factor)
+    xy_boundary = x_boundary, y_boundary
+
+    # directory of images/videos
     path_to_test_images_dir = 'test_images/'
 
     # test images (not used)
@@ -145,22 +160,29 @@ def __main__():
         # worker
         worker,
         # arguments of worker
-        (input_q, output_q, path_to_check_point, xy_start, category_index)
+        (input_q, output_q, path_to_check_point, xy_boundary, category_index, scale_factor)
     )
 
     # capture video
     video_cap = imageio.get_reader(path_to_test_images_dir + "project_video.mp4")
 
     # for each frame, get bounding boxes
-    for frame in video_cap:
-        # put frame in queue
-        input_q.put(frame)
-        # get frame with bounding boxes
-        output = output_q.get()
-        plt.imshow(output)
-        plt.pause(0.00001)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    for index, frame in enumerate(video_cap):
+        # drop every 2nd frame to improve FPS
+        # (index % 3 != 0) to drop every 3rd frame
+        if index % 2 == 0:
+            # start time
+            t_start = t.time()
+            # put frame in queue
+            input_q.put(frame)
+            # get frame with bounding boxes
+            output = output_q.get()
+            # start time
+            t_end = t.time()
+            print("time (ms): {:0.2f}".format((t_end - t_start) * 1000))
+            # visualization (matplotlib is very slow)
+            cv2.imshow("detection", output)
+            cv2.waitKey(1)
 
     # cleaning tasks
     plt.show()
