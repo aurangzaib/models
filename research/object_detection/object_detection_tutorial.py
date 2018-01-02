@@ -1,13 +1,13 @@
 import os
 import sys
-import time
+from multiprocessing import Queue, Pool
 
 import cv2
 import imageio
 import numpy as np
 from matplotlib import pyplot as plt
+
 import tensorflow as tf
-from multiprocessing import Queue, Pool
 
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
@@ -17,6 +17,11 @@ from utils import visualization_utils as vis_util
 
 
 def optimize_image(img, x_start_stop, y_start_stop):
+    """
+    define ROI in the image
+    crop ROI
+    """
+
     # reduce dimensions
     img = cv2.resize(img, None,
                      fx=0.3, fy=0.3,
@@ -43,7 +48,13 @@ def optimize_image(img, x_start_stop, y_start_stop):
     return img
 
 
-def detect_object(image_np, sess, detection_graph):
+def detect_object(image_np, sess, detection_graph, xy_start, category_index):
+    """
+    get optimized image
+    detect bounding boxes with scores
+    draw bounding boxes on image
+    """
+
     # Definite input and output Tensors for detection_graph
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
 
@@ -61,9 +72,8 @@ def detect_object(image_np, sess, detection_graph):
     num_detections = detection_graph.get_tensor_by_name('num_detections:0')
 
     # Actual detection.
-    (boxes, scores, classes, num) = sess.run(
-        [detection_boxes, detection_scores, detection_classes, num_detections],
-        feed_dict={image_tensor: image_np_expanded})
+    (boxes, scores, classes, num) = sess.run([detection_boxes, detection_scores, detection_classes, num_detections],
+                                             feed_dict={image_tensor: image_np_expanded})
 
     # Visualization of the results of a detection.
     vis_util.visualize_boxes_and_labels_on_image_array(
@@ -78,11 +88,11 @@ def detect_object(image_np, sess, detection_graph):
     return image_np
 
 
-def worker(input_q, output_q):
+def worker(input_q, output_q, path_to_check_point, xy_start, category_index):
     detection_graph = tf.Graph()
     with detection_graph.as_default():
         od_graph_def = tf.GraphDef()
-        with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+        with tf.gfile.GFile(path_to_check_point, 'rb') as fid:
             serialized_graph = fid.read()
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')
@@ -91,46 +101,72 @@ def worker(input_q, output_q):
 
     while True:
         frame = input_q.get()
-        output_q.put(detect_object(frame, sess, detection_graph))
+        output_q.put(detect_object(frame, sess, detection_graph, xy_start, category_index))
 
     sess.close()
 
 
-# Path to frozen detection graph. This is the actual model that is used for the object detection.
-MODEL_NAME = 'ssd_mobilenet_weight'
-PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
+def __main__():
+    """
+    Feature Extractor: MobileNets
+    Meta-architecture: SSD
+    Dataset: MS-COCO
+    """
 
-# List of the strings that is used to add correct label for each box.
-PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
+    # Path to frozen detection graph. This is the actual model that is used for the object detection.
+    model_name = 'weights/ssd_mobilenet'
+    path_to_check_point = model_name + '/frozen_inference_graph.pb'
 
-NUM_CLASSES = 90
-xy_start = (0, 630), (120, 280)
+    # List of the strings that is used to add correct label for each box.
+    path_to_labels = os.path.join('data', 'mscoco_label_map.pbtxt')
 
-PATH_TO_TEST_IMAGES_DIR = 'test_images/'
-TEST_IMAGE_PATHS = [os.path.join(PATH_TO_TEST_IMAGES_DIR, 'image3.jpg'.format(i)) for i in range(0, 1)]
+    num_classes = 1
+    x_boundary = (0, 630)
+    y_boundary = (120, 280)
+    xy_start = x_boundary, y_boundary
 
-label_map = label_map_util.load_labelmap(PATH_TO_LABELS)
-categories = label_map_util.convert_label_map_to_categories(label_map,
-                                                            max_num_classes=NUM_CLASSES,
-                                                            use_display_name=True)
-category_index = label_map_util.create_category_index(categories)
+    # directory if images/videos
+    path_to_test_images_dir = 'test_images/'
 
-queue_size = 1
-input_q = Queue(maxsize=queue_size)
-output_q = Queue(maxsize=queue_size)
-pool = Pool(2, worker, (input_q, output_q))
+    # test images (not used)
+    test_image_paths = [os.path.join(path_to_test_images_dir, 'image3.jpg'.format(i)) for i in range(0, 1)]
 
-# capture video
-video_cap = imageio.get_reader(PATH_TO_TEST_IMAGES_DIR + "project_video.mp4")
+    label_map = label_map_util.load_labelmap(path_to_labels)
+    categories = label_map_util.convert_label_map_to_categories(label_map,
+                                                                max_num_classes=num_classes,
+                                                                use_display_name=True)
+    category_index = label_map_util.create_category_index(categories)
 
-for frame in video_cap:
-    input_q.put(frame)
-    output = output_q.get()
-    plt.imshow(output)
-    plt.pause(0.00001)
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-plt.show()
-pool.terminate()
-video_cap.stop()
-cv2.destroyAllWindows()
+    queue_size = 5
+    input_q, output_q = Queue(maxsize=queue_size), Queue(maxsize=queue_size)
+    pool = Pool(
+        # number of queues
+        2,
+        # worker
+        worker,
+        # arguments of worker
+        (input_q, output_q, path_to_check_point, xy_start, category_index)
+    )
+
+    # capture video
+    video_cap = imageio.get_reader(path_to_test_images_dir + "project_video.mp4")
+
+    # for each frame, get bounding boxes
+    for frame in video_cap:
+        # put frame in queue
+        input_q.put(frame)
+        # get frame with bounding boxes
+        output = output_q.get()
+        plt.imshow(output)
+        plt.pause(0.00001)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    # cleaning tasks
+    plt.show()
+    pool.terminate()
+    video_cap.stop()
+    cv2.destroyAllWindows()
+
+
+__main__()
