@@ -100,7 +100,7 @@ def _create_learning_rate(learning_rate_config, global_summaries):
     learning_rate_sequence = [config.initial_learning_rate]
     learning_rate_sequence += [x.learning_rate for x in config.schedule]
     learning_rate = learning_schedules.manual_stepping(
-        tf.train.get_or_create_global_step(), learning_rate_step_boundaries,
+        tf.contrib.framework.get_or_create_global_step(), learning_rate_step_boundaries,
         learning_rate_sequence)
 
   if learning_rate_type == 'cosine_decay_learning_rate':
