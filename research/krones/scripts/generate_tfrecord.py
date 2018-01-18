@@ -14,6 +14,7 @@ import tensorflow as tf
 from krones.scripts.img_aug import AugmentDataset
 from object_detection.utils import dataset_util
 from random import randint
+import matplotlib.pyplot as plt
 
 flags = tf.app.flags
 flags.DEFINE_string('dir', '', 'Path data/.csv and images/.jpg root')
@@ -22,9 +23,9 @@ flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
 # control flags
-SAVE_RECORD = True
-SAVE_AUGMENTED_RECORD = True
-SAVE_AUGMENTED_IMAGES = True
+SAVE_RECORD = False
+SAVE_AUGMENTED_RECORD = False
+SAVE_AUGMENTED_IMAGES = False
 SHOW_VISUALIZATION = False
 
 """
@@ -64,6 +65,26 @@ class GenerateTFRecord:
         data = namedtuple('data', ['filename', 'object'])
         gb = df.groupby(group)
         return [data(filename, gb.get_group(x)) for filename, x in zip(gb.groups.keys(), gb.groups)]
+
+    @staticmethod
+    def dataset_overview(grouped):
+        fallen, standing, examples = 0, 0, range(len(grouped))
+        fallen_list, standing_list = [], []
+        for group in grouped:
+            for index, row in group.object.iterrows():
+                class_name = row['class'].encode('utf8')
+                if class_name == 'fallen':
+                    fallen += 1
+                elif class_name == 'standing':
+                    standing += 1
+
+            fallen_list.append(fallen), standing_list.append(standing)
+            fallen, standing = 0, 0
+
+        # stack-bar graph
+        plt.bar(examples, fallen_list, 0.35, color='r')
+        plt.bar(examples, standing_list, 0.35, bottom=fallen, color='g')
+        plt.show()
 
     @staticmethod
     def create_tf_record(group, path):
@@ -163,10 +184,8 @@ class GenerateTFRecord:
         }))
 
     @staticmethod
-    def write_tf_record(output_path, csv_input, image_dir, full_labels):
+    def write_tf_record(output_path, image_dir, grouped, full_labels):
         writer = tf.python_io.TFRecordWriter(output_path)
-        examples = pd.read_csv(csv_input)
-        grouped = GenerateTFRecord.split(examples, 'filename')
         for group in grouped:
             filename = group.filename.encode('utf8')
             # classes for the image
@@ -174,15 +193,15 @@ class GenerateTFRecord:
             # create original tf_record
             tf_example = GenerateTFRecord.create_tf_record(group, image_dir)
             # save tf_record
-            writer.write(tf_example.SerializeToString()) if SAVE_RECORD else None
-            # augment dataset
-            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
-            # visualize augmented dataset
-            AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes) if SHOW_VISUALIZATION else None
-            # show augmented dataset
-            AugmentDataset.save_augmentations(ag_img, ag_bbx, classes) if SAVE_AUGMENTED_IMAGES else None
-            # generate augmentations of the image
+            writer.write(tf_example.SerializeToString())
             if SAVE_AUGMENTED_RECORD:
+                # augment dataset
+                ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+                # visualize augmented dataset
+                AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes) if SHOW_VISUALIZATION else None
+                # show augmented dataset
+                AugmentDataset.save_augmentations(ag_img, ag_bbx, classes) if SAVE_AUGMENTED_IMAGES else None
+                # generate augmentations of the image
                 for img, bbx, lb in zip(ag_img, ag_bbx, w_lb):
                     # create augmented tf_record
                     full_filename = "{}-{}-{}".format(filename, lb, randint(0, 100000))
@@ -206,8 +225,13 @@ def main(_):
     # labels for dataset
     full_labels = pd.read_csv(csv_input)
     full_labels.head()
+
+    examples = pd.read_csv(csv_input)
+    grouped = GenerateTFRecord.split(examples, 'filename')
+
+    GenerateTFRecord.dataset_overview(grouped)
     # augment, generate and write tf_record files as train.record
-    GenerateTFRecord.write_tf_record(output_path, csv_input, image_dir, full_labels)
+    GenerateTFRecord.write_tf_record(output_path, image_dir, grouped, full_labels) if SAVE_RECORD else None
 
 
 if __name__ == '__main__':
