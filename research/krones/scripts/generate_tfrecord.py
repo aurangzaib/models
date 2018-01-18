@@ -13,6 +13,7 @@ from PIL import Image
 import tensorflow as tf
 from krones.scripts.img_aug import AugmentDataset
 from object_detection.utils import dataset_util
+from random import randint
 
 flags = tf.app.flags
 flags.DEFINE_string('dir', '', 'Path data/.csv and images/.jpg root')
@@ -21,8 +22,10 @@ flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
 # control flags
-save_with_augmentations = True
-show_visualization = False
+SAVE_RECORD = True
+SAVE_AUGMENTED_RECORD = True
+SAVE_AUGMENTED_IMAGES = True
+SHOW_VISUALIZATION = False
 
 """
 Implementation taken from:
@@ -171,23 +174,26 @@ class GenerateTFRecord:
             # create original tf_record
             tf_example = GenerateTFRecord.create_tf_record(group, image_dir)
             # save tf_record
-            writer.write(tf_example.SerializeToString())
+            writer.write(tf_example.SerializeToString()) if SAVE_RECORD else None
+            # augment dataset
+            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+            # visualize augmented dataset
+            AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes) if SHOW_VISUALIZATION else None
+            # show augmented dataset
+            AugmentDataset.save_augmentations(ag_img, ag_bbx, classes) if SAVE_AUGMENTED_IMAGES else None
             # generate augmentations of the image
-            if save_with_augmentations:
-                # augment dataset
-                ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
-                # visualize augmented dataset
-                AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes, w_lb) if show_visualization else None
+            if SAVE_AUGMENTED_RECORD:
                 for img, bbx, lb in zip(ag_img, ag_bbx, w_lb):
                     # create augmented tf_record
+                    full_filename = "{}-{}-{}".format(filename, lb, randint(0, 100000))
                     ag_tf_example = GenerateTFRecord.create_tf_record_augmented(img,
                                                                                 image_dir,
                                                                                 bbx.bounding_boxes,
-                                                                                filename + lb,
+                                                                                full_filename,
                                                                                 classes)
                     # save tf_record
                     writer.write(ag_tf_example.SerializeToString())
-        # close file
+            # close file
         writer.close()
         print('Successfully created the TFRecords: {}'.format(output_path))
 
