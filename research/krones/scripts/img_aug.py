@@ -142,32 +142,6 @@ class AugmentDataset:
         return augmented_images, augmented_boxes
 
     @staticmethod
-    def perform_augmentation(img_name, full_labels):
-        img = cv2.imread('../dataset/train/images/' + img_name)
-        bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(img_name, full_labels), shape=img.shape)
-        classes = AugmentDataset.get_classes(img_name, full_labels)
-        orientations = [90, 180, 270]
-        brightnesses = [0.40, 1.60]
-        scales = [0.5, 0.75]
-
-        for _ in orientations:
-            ag, bboxes = AugmentDataset.augment_orientation(img, bbs, _)
-            ag = AugmentDataset.draw_boxes(ag, bboxes.bounding_boxes, classes)
-            cv2.imshow("orientation: " + str(_), ag)
-
-        for _ in brightnesses:
-            ag, bboxes = AugmentDataset.augment_brightness(img, bbs, _)
-            ag = AugmentDataset.draw_boxes(ag, bboxes.bounding_boxes, classes)
-            cv2.imshow("brightness: " + str(_), ag)
-
-        for _ in scales:
-            ag, bboxes = AugmentDataset.augment_scale(img, bbs, _)
-            ag = AugmentDataset.draw_boxes(ag, bboxes.bounding_boxes, classes)
-            cv2.imshow("scale: " + str(_), ag)
-
-        cv2.waitKey()
-
-    @staticmethod
     def create_augmentations(filename, image_dir, full_labels):
         """
         generate augmentations the given image
@@ -179,10 +153,8 @@ class AugmentDataset:
         image = cv2.imread(image_dir + "/" + filename)
         # bounding box for the original image
         bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(filename, full_labels), shape=image.shape)
-
         # augmentation containers
         augmented_images, augmented_boxes = [], []
-
         # recursive orientation augmentations
         augmented_images, augmented_boxes = AugmentDataset.recursive_augment_orientation(image,
                                                                                          bbs,
@@ -198,7 +170,7 @@ class AugmentDataset:
                                                                                    bbs,
                                                                                    augmented_images,
                                                                                    augmented_boxes)
-        # at this point we have all augmentations and their bounding boxes for the original image
+        # augmentations and their bounding boxes for the original image
         return augmented_images, augmented_boxes, window_labels
 
     @staticmethod
@@ -206,6 +178,20 @@ class AugmentDataset:
         for img, bbx in zip(augmented_images, augmented_boxes):
             title = "{}".format(randint(0, 10000))
             cv2.imshow(title, AugmentDataset.draw_boxes(img, bbx.bounding_boxes, classes))
+            cv2.waitKey()
+
+    @staticmethod
+    def viz_boxes(filenames, full_labels):
+        for filename in filenames:
+            # read image
+            image = cv2.imread(filename)
+            # read bounding box
+            bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(filename.rsplit('/', 1)[-1], full_labels),
+                                          shape=image.shape)
+            # read classes
+            classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
+            # show image with boxes
+            cv2.imshow("image", AugmentDataset.draw_boxes(image, bbs.bounding_boxes, classes))
             cv2.waitKey()
 
     @staticmethod
@@ -220,18 +206,12 @@ class AugmentDataset:
 
 
 def __main__():
-    img_names = glob.glob("../dataset/train/images/*.jpg")
+    image_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research/krones/dataset/train/images"
+    img_names = glob.glob(image_dir + "/*.jpg")
     full_labels = pd.read_csv('../data/train.csv')
     full_labels.head()
-
     ia.seed(1)
+    AugmentDataset.viz_boxes(img_names, full_labels)
 
-    for img_name in img_names:
-        img_name = img_name.rsplit('/', 1)[-1]
-        classes = AugmentDataset.get_classes(img_name, full_labels)
-        ag_images, ag_boxes, windows_labels = AugmentDataset.create_augmentations(img_name, full_labels)
-        for img, bbx, cls in zip(ag_images, ag_boxes, classes):
-            cv2.imshow(cls, AugmentDataset.draw_boxes(img, bbx.bounding_boxes, cls))
-            cv2.waitKey()
 
 # __main__()

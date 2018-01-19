@@ -8,7 +8,9 @@ import tensorflow as tf
 Usage (from models/research/):
 
   # Create train data:
-  python krones/scripts/xml_to_csv.py --xml_dir=${krones_train_annotations} --csv=${krones_train_csv}
+  python krones/scripts/xml_to_csv.py \
+                        --xml_dir=${krones_train_annotations} \
+                        --csv=${krones_train_csv}
 
   # Create test data:
   python krones/scripts/xml_to_csv.py --xml_dir=${krones_eval_annotations} --csv=${krones_eval_csv}

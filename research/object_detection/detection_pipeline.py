@@ -148,7 +148,7 @@ def __main__():
     path_to_test = {
         "root": "object_detection/test_images/",
         "pet": 'object_detection/test_images/pet-bottles/',
-        "krones": "object_detection/test_images/krones_test_dataset/"
+        "krones": "object_detection/test_images/dt3/"
     }
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -158,7 +158,7 @@ def __main__():
         "rcnn_inception": "object_detection/weights/faster_rcnn_inception_v2_coco_2017_11_08",
         "rcnn_resnet": "object_detection/weights/faster_rcnn_resnet50_coco_2017_11_08",
         "raccoon": "object_detection/weights/ssd_inception_v2_racoon",
-        "krones": "dataset_krones_2/models/ssd_mobilenet_v1_coco/frozen_graph"
+        "krones": "krones/models/ssd_mobilenet_v1_coco/frozen_graph"
     }
 
     # label maps for different datasets
@@ -167,7 +167,7 @@ def __main__():
         "kitti": "object_detection/data/kitti_label_map.pbtxt",
         "pet": "object_detection/data/pet_label_map.pbtxt",
         "raccoon": "object_detection/data/racoon_label_map.pbtxt",
-        "krones": "dataset_krones_2/data/label_map.pbtxt"
+        "krones": "krones/data/label_map.pbtxt"
     }
 
     checkpoint_path = models["krones"] + '/frozen_inference_graph.pb'

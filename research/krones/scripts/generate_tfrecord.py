@@ -22,9 +22,11 @@ flags.DEFINE_string('csv', '', 'Name of CSV file')
 flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
-# control flags
+# record flags
 SAVE_RECORD = False
 SAVE_AUGMENTED_RECORD = False
+
+# visualization flags
 SAVE_AUGMENTED_IMAGES = False
 SHOW_VISUALIZATION = False
 
@@ -68,6 +70,7 @@ class GenerateTFRecord:
 
     @staticmethod
     def dataset_overview(grouped):
+        print("dataset overview is active")
         fallen, standing, examples = 0, 0, range(len(grouped))
         fallen_list, standing_list = [], []
         for group in grouped:
@@ -131,21 +134,16 @@ class GenerateTFRecord:
         # using GFile reduces the TFRecord size significantly
         # TODO: find a way to avoid saving image using opencv and re-reading it again using GFile
         cv2.imwrite(path, image)
-
         # read encoded jpg files
         with tf.gfile.GFile(path, 'rb') as fid:
             encoded_jpg = fid.read()
         encoded_jpg_io = io.BytesIO(encoded_jpg)
-
         # features
         image = Image.open(encoded_jpg_io)
-
         # dimensions
         width, height = image.size
-
         # format
         image_format = b'jpg'
-
         # bounding boxes
         xmins, xmaxs, ymins, ymaxs = [], [], [], []
         classes_text, classes = [], []
@@ -158,7 +156,6 @@ class GenerateTFRecord:
             ymaxs.append(row.y2 / height)
             classes_text.append(cls[index].encode('utf8'))
             classes.append(GenerateTFRecord.class_text_to_int(cls[index]))
-
         # generate TFRecord
         bounds = [xmins, xmaxs, ymins, ymaxs]
         tf_example = GenerateTFRecord.create_features(height, width, filename,
@@ -185,6 +182,7 @@ class GenerateTFRecord:
 
     @staticmethod
     def write_tf_record(output_path, image_dir, grouped, full_labels):
+        print("write tf record is active")
         writer = tf.python_io.TFRecordWriter(output_path)
         for group in grouped:
             filename = group.filename.encode('utf8')
@@ -197,10 +195,6 @@ class GenerateTFRecord:
             if SAVE_AUGMENTED_RECORD:
                 # augment dataset
                 ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
-                # visualize augmented dataset
-                AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes) if SHOW_VISUALIZATION else None
-                # show augmented dataset
-                AugmentDataset.save_augmentations(ag_img, ag_bbx, classes) if SAVE_AUGMENTED_IMAGES else None
                 # generate augmentations of the image
                 for img, bbx, lb in zip(ag_img, ag_bbx, w_lb):
                     # create augmented tf_record
@@ -216,21 +210,52 @@ class GenerateTFRecord:
         writer.close()
         print('Successfully created the TFRecords: {}'.format(output_path))
 
+    @staticmethod
+    def save_augmented_dataset(image_dir, grouped, full_labels):
+        print("save augmented dataset is active")
+        for group in grouped:
+            filename = group.filename.encode('utf8')
+            classes = AugmentDataset.get_classes(filename, full_labels)
+            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+            AugmentDataset.save_augmentations(ag_img, ag_bbx, classes)
+
+    @staticmethod
+    def viz_augmented_dataset(image_dir, grouped, full_labels):
+        print("augmented dataset visualization is active")
+        for group in grouped:
+            filename = group.filename.encode('utf8')
+            classes = AugmentDataset.get_classes(filename, full_labels)
+            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+            AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes)
+
 
 def main(_):
     # directories
     output_path = FLAGS.output
     csv_input = FLAGS.csv
     image_dir = FLAGS.dir
+
     # labels for dataset
     full_labels = pd.read_csv(csv_input)
     full_labels.head()
-
     examples = pd.read_csv(csv_input)
     grouped = GenerateTFRecord.split(examples, 'filename')
 
-    GenerateTFRecord.dataset_overview(grouped)
+    # overview of the dataset
+    # flag: SHOW_VISUALIZATION
+
+    GenerateTFRecord.dataset_overview(grouped) if SHOW_VISUALIZATION else None
+
+    # visualize augmented images
+    # flag: SHOW_VISUALIZATION
+    GenerateTFRecord.viz_augmented_dataset(image_dir, grouped, full_labels) if SHOW_VISUALIZATION else None
+
+    # save augmented images
+    # flag: SAVE_AUGMENTED_IMAGES
+    GenerateTFRecord.save_augmented_dataset(image_dir, grouped, full_labels) if SAVE_AUGMENTED_IMAGES else None
+
     # augment, generate and write tf_record files as train.record
+    # flag: SAVE_RECORD
     GenerateTFRecord.write_tf_record(output_path, image_dir, grouped, full_labels) if SAVE_RECORD else None
 
 
