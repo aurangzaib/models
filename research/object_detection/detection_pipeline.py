@@ -158,7 +158,7 @@ def __main__():
     path_to_test = {
         "root": "object_detection/test_images/",
         "pet": 'object_detection/test_images/pet-bottles/',
-        "krones": "object_detection/test_images/krones_test_dataset_6/"
+        "krones": "object_detection/test_images/krones_test_dataset_5/"
     }
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.

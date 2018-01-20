@@ -23,8 +23,8 @@ flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
 # record flags
-SAVE_RECORD = False
-SAVE_AUGMENTED_RECORD = False
+SAVE_RECORD = True
+SAVE_AUGMENTED_RECORD = True
 
 # visualization flags
 SAVE_AUGMENTED_IMAGES = False
