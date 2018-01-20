@@ -10,6 +10,10 @@ import numpy as np
 
 import tensorflow as tf
 
+flags = tf.app.flags
+flags.DEFINE_string('CKPT_NUMBER', '', 'Checkpoint number for frozen graph')
+FLAGS = flags.FLAGS
+
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
 
@@ -130,7 +134,7 @@ def handle_queues(input_q, output_q, input_frame):
     t_end = t.time()
     print("time (ms): {:0.2f}".format((t_end - t_start) * 1000))
     # visualization (matplotlib is very slow)
-    cv2.imshow("detection", output_frame)
+    cv2.imshow("detection using CKPT_NUMBER=" + FLAGS.CKPT_NUMBER, output_frame)
     cv2.waitKey(1)
 
 
@@ -143,12 +147,12 @@ def __main__():
 
     # flags
     use_image, use_video = True, False
-
+    ckpt_number = "_{}".format(FLAGS.CKPT_NUMBER) if int(FLAGS.CKPT_NUMBER) > 0 else ""
     # directory of images/videos
     path_to_test = {
         "root": "object_detection/test_images/",
         "pet": 'object_detection/test_images/pet-bottles/',
-        "krones": "object_detection/test_images/dt3/"
+        "krones": "object_detection/test_images/krones_test_dataset_6/"
     }
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -158,7 +162,7 @@ def __main__():
         "rcnn_inception": "object_detection/weights/faster_rcnn_inception_v2_coco_2017_11_08",
         "rcnn_resnet": "object_detection/weights/faster_rcnn_resnet50_coco_2017_11_08",
         "raccoon": "object_detection/weights/ssd_inception_v2_racoon",
-        "krones": "krones/models/ssd_mobilenet_v1_coco/frozen_graph"
+        "krones": "{}{}".format("krones/models/ssd_mobilenet_v1_coco/frozen_graph", ckpt_number)
     }
 
     # label maps for different datasets

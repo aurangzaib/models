@@ -194,7 +194,9 @@ class GenerateTFRecord:
             writer.write(tf_example.SerializeToString())
             if SAVE_AUGMENTED_RECORD:
                 # augment dataset
-                ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+                ag_img, ag_bbx, w_lb = AugmentDataset.create_extra_orientation_augmentations(filename,
+                                                                                             image_dir,
+                                                                                             full_labels)
                 # generate augmentations of the image
                 for img, bbx, lb in zip(ag_img, ag_bbx, w_lb):
                     # create augmented tf_record
@@ -216,8 +218,9 @@ class GenerateTFRecord:
         for group in grouped:
             filename = group.filename.encode('utf8')
             classes = AugmentDataset.get_classes(filename, full_labels)
-            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
-            AugmentDataset.save_augmentations(ag_img, ag_bbx, classes)
+            ag_img, ag_bbx, w_lb = AugmentDataset.create_extra_orientation_augmentations(filename, image_dir,
+                                                                                         full_labels)
+            AugmentDataset.save_augmentations(ag_img, ag_bbx, filename, classes)
 
     @staticmethod
     def viz_augmented_dataset(image_dir, grouped, full_labels):
@@ -225,7 +228,7 @@ class GenerateTFRecord:
         for group in grouped:
             filename = group.filename.encode('utf8')
             classes = AugmentDataset.get_classes(filename, full_labels)
-            ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename, image_dir, full_labels)
+            ag_img, ag_bbx, w_lb = AugmentDataset.create_recursive_augmentations(filename, image_dir, full_labels)
             AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes)
 
 
@@ -243,7 +246,6 @@ def main(_):
 
     # overview of the dataset
     # flag: SHOW_VISUALIZATION
-
     GenerateTFRecord.dataset_overview(grouped) if SHOW_VISUALIZATION else None
 
     # visualize augmented images

@@ -5,10 +5,11 @@ import imgaug as ia
 import numpy as np
 import pandas as pd
 from imgaug import augmenters as iaa
-from random import randint
 
 # possible augmentations
 orientations = [90, 180, 270]
+# angle from 15 to 345 with 15 degrees interval
+extra_orientations = [angle for angle in range(15, 360, 15)]
 brightnesses = [0.30, 0.60, 0.90, 1.20, 1.50, 1.80]
 scales = [0.4, 0.6, 0.8]
 # window labels for visualization
@@ -18,26 +19,12 @@ window_labels = [
     "brightness 1.20", "brightness 1.50", "brightness 1.80",
     "scale 0.4", "scale 0.6", "scale 0.8",
 ]
+extra_labels = ["orientation-" + str(_) for _ in extra_orientations]
 
 
 class AugmentDataset:
     # image increment variable
     multiplier = 1
-
-    @staticmethod
-    def pad(image, by):
-        """Pad image with a 1px white and (BY-1)px black border"""
-        if by <= 0:
-            return image
-        image_border1 = np.pad(
-            image, ((1, 1), (1, 1), (0, 0)),
-            mode="constant", constant_values=255
-        )
-        image_border2 = np.pad(
-            image_border1, ((by - 1, by - 1), (by - 1, by - 1), (0, 0)),
-            mode="constant", constant_values=0
-        )
-        return image_border2
 
     @staticmethod
     def get_classes(image_name, full_labels):
@@ -61,6 +48,9 @@ class AugmentDataset:
 
     @staticmethod
     def augment_orientation(image, bounding_boxes, angle=90):
+        """
+        perform orientation augmentation
+        """
         # rotation values
         seq = iaa.Sequential([iaa.Affine(rotate=angle)])
         seq_det = seq.to_deterministic()
@@ -73,6 +63,10 @@ class AugmentDataset:
 
     @staticmethod
     def recursive_augment_orientation(image, bbs, augmented_images, augmented_boxes):
+        """
+        perform orientation augmentation recursively
+        recursively means for each orientation augmentation, perform scale and brightness augmentation too
+        """
         # orientation augmentations
         for _ in orientations:
             # first stage augmentation
@@ -90,6 +84,9 @@ class AugmentDataset:
 
     @staticmethod
     def augment_brightness(image, bounding_boxes, brightness=0.50):
+        """
+        perform brightness augmentation
+        """
         # rotation values
         seq = iaa.Sequential([iaa.Multiply(brightness)])
         seq_det = seq.to_deterministic()
@@ -100,6 +97,10 @@ class AugmentDataset:
 
     @staticmethod
     def recursive_augment_brightness(image, bbs, augmented_images, augmented_boxes):
+        """
+        perform brightness recursively
+        recursively means for each brightness augmentation, perform scale and orientation augmentation too
+        """
         # first stage augmentation
         for _ in brightnesses:
             ag, bbx = AugmentDataset.augment_brightness(image, bbs, _)
@@ -116,6 +117,9 @@ class AugmentDataset:
 
     @staticmethod
     def augment_scale(image, bounding_boxes, scale=0.50):
+        """
+        perform scale augmentation
+        """
         # scaling values
         seq = iaa.Sequential([iaa.Affine(scale={"x": scale, "y": scale})])
         seq_det = seq.to_deterministic()
@@ -127,6 +131,10 @@ class AugmentDataset:
 
     @staticmethod
     def recursive_augment_scale(image, bbs, augmented_images, augmented_boxes):
+        """
+        perform scale augmentation recursively
+        recursively means for each scale augmentation, perform brightness and orientation augmentation too
+        """
         # first stage augmentation
         for _ in scales:
             ag, bbx = AugmentDataset.augment_scale(image, bbs, _)
@@ -142,7 +150,7 @@ class AugmentDataset:
         return augmented_images, augmented_boxes
 
     @staticmethod
-    def create_augmentations(filename, image_dir, full_labels):
+    def create_recursive_augmentations(filename, image_dir, full_labels):
         """
         generate augmentations the given image
         augmentations are:
@@ -174,11 +182,59 @@ class AugmentDataset:
         return augmented_images, augmented_boxes, window_labels
 
     @staticmethod
-    def viz_augmentations(augmented_images, augmented_boxes, classes):
-        for img, bbx in zip(augmented_images, augmented_boxes):
-            title = "{}".format(randint(0, 10000))
+    def create_extra_orientation_augmentations(filename, image_dir, full_labels):
+        """
+        perform angles from 15 to 345 orientations augmentation
+        this is to cover all directions of fallen bottles
+        this is not recursive
+        intended to be used to generate TFRecord
+        """
+        image = cv2.imread(image_dir + "/" + filename)
+        # bounding box for the original image
+        bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(filename, full_labels),
+                                      shape=image.shape)
+        # augmentation containers
+        augmented_images, augmented_boxes = [], []
+        # orientation augmentation
+        for _ in extra_orientations:
+            ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
+            augmented_images.append(ag2), augmented_boxes.append(bbs2)
+        return augmented_images, augmented_boxes, extra_labels
+
+    @staticmethod
+    def save_extra_orientation_augmentations(filenames, full_labels):
+        """
+        perform angles from 15 to 345 orientations augmentation
+        this is to cover all directions of fallen bottles
+        this is not recursive
+        intended to be used to save all orientations for debugging
+        """
+        # directory to save images
+        tf_model_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models"
+        img_save_dir = "{}{}".format(tf_model_dir, "/research/krones/dataset_2/train/images_annotated/")
+        for filename in filenames:
+            image = cv2.imread(filename)
+            image_name = filename.rsplit('/', 1)[-1]
+            # bounding box for the original image
+            bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
+            image_name = image_name.rsplit('.', 1)[0]
+            # classes
+            classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
+            for _ in extra_orientations:
+                # orientation augmentation
+                ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
+                ag2 = AugmentDataset.draw_boxes(ag2, bbs2.bounding_boxes, classes)
+                # new file name
+                aug_image_name = "{}{}-{}.{}".format(img_save_dir, image_name, str(_), "jpg")
+                # save augmentation
+                cv2.imwrite(aug_image_name, ag2)
+
+    @staticmethod
+    def viz_augmentations(augmented_images, augmented_boxes, classes, titles):
+        for img, bbx, ttl in zip(augmented_images, augmented_boxes, titles):
+            title = "aug {}".format(ttl)
             cv2.imshow(title, AugmentDataset.draw_boxes(img, bbx.bounding_boxes, classes))
-            cv2.waitKey()
+        cv2.waitKey()
 
     @staticmethod
     def viz_boxes(filenames, full_labels):
@@ -189,29 +245,33 @@ class AugmentDataset:
             bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(filename.rsplit('/', 1)[-1], full_labels),
                                           shape=image.shape)
             # read classes
-            classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
+            image_name = filename.rsplit('/', 1)[-1]
+            classes = AugmentDataset.get_classes(image_name, full_labels)
             # show image with boxes
             cv2.imshow("image", AugmentDataset.draw_boxes(image, bbs.bounding_boxes, classes))
             cv2.waitKey()
 
     @staticmethod
-    def save_augmentations(augmented_images, augmented_boxes, classes):
+    def save_augmentations(augmented_images, augmented_boxes, filename, classes):
         count = len(augmented_images)
+        tf_model_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research"
+        save_dir = "{}{}".format(tf_model_dir, "/krones/dataset_2/train/images_annotated/")
+        # remove extension
+        filename = filename.rsplit('.', 1)[0]
         for index in range(count):
-            _dir_ = "/Users/siddiqui/Documents/Projects/tensorflow/models/research/krones/dataset/train/images_debug/"
-            window_title = "{}{}.{}".format(_dir_, str(AugmentDataset.multiplier * index), "jpg")
+            print("dir: ", save_dir, filename, str(AugmentDataset.multiplier * index), "jpg")
+            save_dir = "{}{}-{}.{}".format(save_dir, filename, str(AugmentDataset.multiplier * index), "jpg")
             _img_ = AugmentDataset.draw_boxes(augmented_images[index], augmented_boxes[index].bounding_boxes, classes)
-            cv2.imwrite(window_title, _img_)
+            cv2.imwrite(save_dir, _img_)
         AugmentDataset.multiplier += 1
 
 
 def __main__():
-    image_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research/krones/dataset/train/images"
-    img_names = glob.glob(image_dir + "/*.jpg")
-    full_labels = pd.read_csv('../data/train.csv')
+    image_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research/krones/dataset_2/train/images"
+    filenames = glob.glob(image_dir + "/*.jpg")
+    full_labels = pd.read_csv('../data/train_2.csv')
     full_labels.head()
     ia.seed(1)
-    AugmentDataset.viz_boxes(img_names, full_labels)
-
+    AugmentDataset.save_extra_orientation_augmentations(filenames, full_labels)
 
 # __main__()
