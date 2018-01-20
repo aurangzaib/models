@@ -38,7 +38,7 @@ Explanation:
     Read name of images from CSV file
     Get dimension and class of each bounding box in each image
     Save result as TFRecord
-    
+
 Usage:
   # From models/research/
   # Create train data:
@@ -48,7 +48,10 @@ Usage:
                                 --output=${krones_train_record} \
 
   # Create test data:
-  python dataset_krones_2/scripts/generate_tfrecord.py --dir=${krones_eval_dataset} --csv=${krones_eval_csv} --output=${krones_eval_record}
+  python dataset_krones_2/scripts/generate_tfrecord.py \
+                                --dir=${krones_eval_dataset} \
+                                --csv=${krones_eval_csv} \
+                                --output=${krones_eval_record}
 """
 
 

@@ -10,6 +10,12 @@ import numpy as np
 
 import tensorflow as tf
 
+"""
+Usage:
+  # From models/research/
+  python object_detection/detection_pipeline.py --CKPT_NUMBER=checkpoint number for frozen graph
+"""
+
 flags = tf.app.flags
 flags.DEFINE_string('CKPT_NUMBER', '', 'Checkpoint number for frozen graph')
 FLAGS = flags.FLAGS
