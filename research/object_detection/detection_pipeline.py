@@ -78,28 +78,29 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
     detect bounding boxes with scores
     draw bounding boxes on image
     """
-
     # Definite input and output Tensors for detection_graph
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
-
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
     if should_optimize:
         image_np = optimize_image(image_np, xy_boundary[0], xy_boundary[1], scale_factor)
     image_np_expanded = np.expand_dims(image_np, axis=0)
-
     # Each box represents a part of the image where a particular object was detected.
     detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
-
     # Each score represent how level of confidence for each of the objects.
     # Score is shown on the result image, together with the class label.
     detection_scores = detection_graph.get_tensor_by_name('detection_scores:0')
     detection_classes = detection_graph.get_tensor_by_name('detection_classes:0')
     num_detections = detection_graph.get_tensor_by_name('num_detections:0')
-
     # Actual detection
     (boxes, scores, classes, num) = sess.run([detection_boxes, detection_scores, detection_classes, num_detections],
                                              feed_dict={image_tensor: image_np_expanded})
     # Visualization of the results of a detection.
+    annotate_object(image_np, boxes, scores, classes, category_index)
+    # return annotated image
+    return image_np
+
+
+def annotate_object(image_np, boxes, scores, classes, category_index):
     if HIDE_BOXES:
         font = cv2.FONT_HERSHEY_SIMPLEX
         for box, score, cls in zip(np.squeeze(boxes), np.squeeze(scores), np.squeeze(classes).astype(np.int32)):
@@ -118,7 +119,6 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
             category_index,
             use_normalized_coordinates=True,
             line_thickness=8)
-
     return image_np
 
 
@@ -132,10 +132,8 @@ def worker(input_q, output_q, path_to_check_point, xy_boundary, category_index, 
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')
         sess = tf.Session(graph=detection_graph)
-
     while True:
         frame = input_q.get()
-
         # takes around 190 ms for image with dimension (1280, 720, 3)
         output_q.put(detect_object(frame, sess, detection_graph, xy_boundary, category_index, scale_factor))
 
@@ -160,7 +158,6 @@ def __main__():
     Meta-architecture: SSD
     Dataset: MS-COCO
     """
-
     # flags
     use_image, use_video = True, False
     ckpt_number = "_{}".format(FLAGS.CKPT_NUMBER) if int(FLAGS.CKPT_NUMBER) > 0 else ""
@@ -170,7 +167,6 @@ def __main__():
         "pet": 'object_detection/test_images/pet-bottles/',
         "krones": "object_detection/test_images/" + FLAGS.folder
     }
-
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
     models = {
         "ssd_mobilenet": "object_detection/weights/ssd_mobilenet_v1_coco_2017_11_17",
@@ -180,7 +176,6 @@ def __main__():
         "raccoon": "object_detection/weights/ssd_inception_v2_racoon",
         "krones": "{}{}".format("krones/models/ssd_mobilenet_v1_coco/frozen_graph", ckpt_number)
     }
-
     # label maps for different datasets
     labels = {
         "mscoco": "object_detection/data/mscoco_label_map.pbtxt",
@@ -189,31 +184,23 @@ def __main__():
         "raccoon": "object_detection/data/racoon_label_map.pbtxt",
         "krones": "krones/data/label_map.pbtxt"
     }
-
     checkpoint_path = models["krones"] + '/frozen_inference_graph.pb'
-
     # List of the strings that is used to add correct label for each box.
     path_to_labels = labels["krones"]
-
     num_classes = 90
-
     # resolution -- has impact on inference time
     scale_factor = 0.5
-
     # ROI -- has impact on inference time
     x_boundary = (1 * scale_factor, 1270 * scale_factor)
     y_boundary = (1 * scale_factor, 700 * scale_factor)
     xy_boundary = x_boundary, y_boundary
-
     # test images
     image_paths = [name for name in glob.glob(path_to_test["krones"] + '*')]
-
     label_map = label_map_util.load_labelmap(path_to_labels)
     categories = label_map_util.convert_label_map_to_categories(label_map,
                                                                 max_num_classes=num_classes,
                                                                 use_display_name=True)
     category_index = label_map_util.create_category_index(categories)
-
     queue_size = 5
     input_q, output_q = Queue(maxsize=queue_size), Queue(maxsize=queue_size)
     pool = Pool(
@@ -224,7 +211,6 @@ def __main__():
         # arguments of worker
         (input_q, output_q, checkpoint_path, xy_boundary, category_index, scale_factor)
     )
-
     # for images
     if use_image:
         for image_path in image_paths:
@@ -232,18 +218,15 @@ def __main__():
             if os.path.isfile(image_path):
                 handle_queues(input_q, output_q, cv2.imread(image_path), image_name)
                 cv2.waitKey(0)
-
     # for video
     if use_video:
         video_cap = imageio.get_reader(path_to_test["root"] + "project_video.mp4")
-
         # for each frame, get bounding boxes
         for index, frame in enumerate(video_cap):
             # drop every 2nd frame to improve FPS
             if index % 2 == 0:
                 handle_queues(input_q, output_q, frame)
         video_cap.stop()
-
     # cleaning tasks
     pool.terminate()
     cv2.destroyAllWindows()
