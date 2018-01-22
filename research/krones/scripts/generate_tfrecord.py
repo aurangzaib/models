@@ -2,19 +2,21 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import glob
 import io
 import os
 from collections import namedtuple
+from random import randint
 
 import cv2
+import imgaug as ia
+import matplotlib.pyplot as plt
 import pandas as pd
 from PIL import Image
 
 import tensorflow as tf
 from krones.scripts.img_aug import AugmentDataset
 from object_detection.utils import dataset_util
-from random import randint
-import matplotlib.pyplot as plt
 
 flags = tf.app.flags
 flags.DEFINE_string('dir', '', 'Path data/.csv and images/.jpg root')
@@ -22,12 +24,9 @@ flags.DEFINE_string('csv', '', 'Name of CSV file')
 flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
-# record flags
-SAVE_RECORD = True
-SAVE_AUGMENTED_RECORD = True
-
-# visualization flags
-SAVE_AUGMENTED_IMAGES = False
+# record and visualization flags
+SAVE_RECORD, SAVE_AUGMENTED_RECORD = False, False
+ASSERT_AUGMENTED_IMAGES, SAVE_AUGMENTED_IMAGES = False, True
 SHOW_VISUALIZATION = False
 
 """
@@ -216,14 +215,18 @@ class GenerateTFRecord:
         print('Successfully created the TFRecords: {}'.format(output_path))
 
     @staticmethod
-    def save_augmented_dataset(image_dir, grouped, full_labels):
+    def save_augmented_dataset(image_dir, full_labels):
+        filenames = glob.glob(image_dir + "/*.jpg")
+        ia.seed(1)
         print("save augmented dataset is active")
-        for group in grouped:
-            filename = group.filename.encode('utf8')
-            classes = AugmentDataset.get_classes(filename, full_labels)
-            ag_img, ag_bbx, w_lb = AugmentDataset.create_extra_orientation_augmentations(filename, image_dir,
-                                                                                         full_labels)
-            AugmentDataset.save_augmentations(ag_img, ag_bbx, filename, classes)
+        AugmentDataset.save_extra_orientation_augmentations(filenames, full_labels, image_dir)
+
+    @staticmethod
+    def assert_augmented_dataset(image_dir, full_labels):
+        filenames = glob.glob(image_dir + "/*.jpg")
+        ia.seed(1)
+        print("save augmented dataset is active")
+        AugmentDataset.assert_extra_orientation_augmentations(filenames, full_labels, image_dir)
 
     @staticmethod
     def viz_augmented_dataset(image_dir, grouped, full_labels):
@@ -255,9 +258,13 @@ def main(_):
     # flag: SHOW_VISUALIZATION
     GenerateTFRecord.viz_augmented_dataset(image_dir, grouped, full_labels) if SHOW_VISUALIZATION else None
 
+    # assert augmented images
+    # flag: ASSERT_AUGMENTED_IMAGES
+    GenerateTFRecord.assert_augmented_dataset(image_dir, full_labels) if ASSERT_AUGMENTED_IMAGES else None
+
     # save augmented images
     # flag: SAVE_AUGMENTED_IMAGES
-    GenerateTFRecord.save_augmented_dataset(image_dir, grouped, full_labels) if SAVE_AUGMENTED_IMAGES else None
+    GenerateTFRecord.save_augmented_dataset(image_dir, full_labels) if SAVE_AUGMENTED_IMAGES else None
 
     # augment, generate and write tf_record files as train.record
     # flag: SAVE_RECORD

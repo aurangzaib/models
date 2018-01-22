@@ -1,18 +1,16 @@
-import glob
 from random import uniform
 
 import cv2
 import imgaug as ia
 import numpy as np
-import pandas as pd
 from imgaug import augmenters as iaa
 
 # possible augmentations
 orientations = [90, 180, 270]
 # angle from 15 to 345 with 15 degrees interval
-extra_orientations = [angle for angle in range(15, 360, 15)]
+extra_orientations = [angle for angle in range(0, 375, 15)]
 brightnesses = [0.30, 0.60, 0.90, 1.20, 1.50, 1.80]
-scales = [0.4, 0.6, 0.8]
+scales = [0.6, 0.8, 1.2, 1.5]
 # window labels for visualization
 window_labels = [
     "angle 90", "angle 180", "angle 270",
@@ -124,7 +122,7 @@ class AugmentDataset:
         # scaling values
         seq = iaa.Sequential([iaa.Affine(scale={"x": scale, "y": scale})])
         seq_det = seq.to_deterministic()
-        # apply rotation on the image
+        # apply scale on the image
         img_aug = seq_det.augment_images([image])[0]
         bbs_aug = seq_det.augment_bounding_boxes([bounding_boxes])[0].remove_out_of_image().cut_out_of_image()
         # return image and bounding boxes
@@ -190,7 +188,9 @@ class AugmentDataset:
         this is not recursive
         intended to be used to generate TFRecord
         """
-        image = cv2.imread(image_dir + "/" + filename)
+        f_name = "{}/{}".format(image_dir, filename)
+        image = cv2.imread(f_name)
+        print(filename)
         # bounding box for the original image
         bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(filename, full_labels),
                                       shape=image.shape)
@@ -198,20 +198,20 @@ class AugmentDataset:
         augmented_images, augmented_boxes = [], []
         # orientation augmentation
         for _ in extra_orientations:
-            # orientation augmentation
-            ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
             # random scale augmentation
-            scale = float("{:0.5f}".format(uniform(0.4, 0.7)))
-            ag2, bbs2 = AugmentDataset.augment_scale(ag2, bbs2, scale)
+            scale = float("{:0.5f}".format(uniform(0.6, 1.0)))
+            ag2, bbs2 = AugmentDataset.augment_scale(image, bbs, scale)
             # random brightness augmentation
-            brightness = float("{:0.5f}".format(uniform(0.3, 0.7)))
+            brightness = float("{:0.5f}".format(uniform(0.2, 1.5)))
             ag2, bbs2 = AugmentDataset.augment_brightness(ag2, bbs2, brightness)
+            # orientation augmentation
+            ag2, bbs2 = AugmentDataset.augment_orientation(ag2, bbs2, _)
             # append images and bounding boxes
             augmented_images.append(ag2), augmented_boxes.append(bbs2)
         return augmented_images, augmented_boxes, extra_labels
 
     @staticmethod
-    def save_extra_orientation_augmentations(filenames, full_labels):
+    def save_extra_orientation_augmentations(filenames, full_labels, image_dir):
         """
         perform angles from 15 to 345 orientations augmentation
         this is to cover all directions of fallen bottles
@@ -219,31 +219,51 @@ class AugmentDataset:
         intended to be used to save all orientations for debugging
         """
         # directory to save images
-        tf_model_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models"
-        img_save_dir = "{}{}".format(tf_model_dir, "/research/krones/dataset_3/train/images_annotated/")
+        img_save_dir = "{}_{}".format(image_dir, "annotated/")
         for filename in filenames:
             image = cv2.imread(filename)
             image_name = filename.rsplit('/', 1)[-1]
-            # bounding box for the original image
-            bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
-            image_name = image_name.rsplit('.', 1)[0]
-            # classes
-            classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
-            for _ in extra_orientations:
-                # orientation augmentation
-                ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
-                # random scale augmentation
-                scale = float("{:0.1f}".format(uniform(0.4, 0.7)))
-                ag2, bbs2 = AugmentDataset.augment_scale(ag2, bbs2, scale)
-                # random brightness augmentation
-                brightness = float("{:0.1f}".format(uniform(0.3, 0.7)))
-                ag2, bbs2 = AugmentDataset.augment_brightness(ag2, bbs2, brightness)
-                # draw boxes for debugging
-                ag2 = AugmentDataset.draw_boxes(ag2, bbs2.bounding_boxes, classes)
-                # new file name
-                aug_image_name = "{}{}-{}.{}".format(img_save_dir, image_name, str(_), "jpg")
-                # save augmentation
-                cv2.imwrite(aug_image_name, ag2)
+            # skip temporary debugging files
+            if ("tmp.jpg" in image_name) is False:
+                print("-> {}".format(image_name))
+                # bounding box for the original image
+                bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
+                image_name = image_name.rsplit('.', 1)[0]
+                # classes
+                classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
+                for _ in extra_orientations:
+                    # orientation augmentation
+                    ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
+                    # random scale augmentation
+                    scale = float("{:0.1f}".format(uniform(0.6, 1.0)))
+                    ag2, bbs2 = AugmentDataset.augment_scale(ag2, bbs2, scale)
+                    # random brightness augmentation
+                    brightness = float("{:0.1f}".format(uniform(0.3, 1.5)))
+                    ag2, bbs2 = AugmentDataset.augment_brightness(ag2, bbs2, brightness)
+                    # draw boxes for debugging
+                    ag2 = AugmentDataset.draw_boxes(ag2, bbs2.bounding_boxes, classes)
+                    # new file name
+                    aug_image_name = "{}{}-{}.{}".format(img_save_dir, image_name, str(_), "jpg")
+                    # save augmentation
+                    cv2.imwrite(aug_image_name, ag2)
+
+    @staticmethod
+    def assert_extra_orientation_augmentations(filenames, full_labels, image_dir):
+        """
+        assert the scale augmentation
+        """
+        for filename in filenames:
+            image = cv2.imread(filename)
+            image_name = filename.rsplit('/', 1)[-1]
+            # skip temporary debugging files
+            if ("tmp.jpg" in image_name) is False:
+                print("-> {}".format(image_name))
+                # bounding box for the original image
+                bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
+                for _ in extra_orientations:
+                    # random scale augmentation
+                    scale = float("{:0.1f}".format(uniform(0.2, 2.0)))
+                    AugmentDataset.augment_scale(image, bbs, scale)
 
     @staticmethod
     def viz_augmentations(augmented_images, augmented_boxes, classes, titles):
@@ -268,27 +288,13 @@ class AugmentDataset:
             cv2.waitKey()
 
     @staticmethod
-    def save_augmentations(augmented_images, augmented_boxes, filename, classes):
+    def save_augmentations(augmented_images, augmented_boxes, filename, classes, img_dir):
         count = len(augmented_images)
-        tf_model_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research"
-        save_dir = "{}{}".format(tf_model_dir, "/krones/dataset_2/train/images_annotated/")
+        save_dir = "{}_annotated".format(img_dir)
         # remove extension
         filename = filename.rsplit('.', 1)[0]
         for index in range(count):
-            print("dir: ", save_dir, filename, str(AugmentDataset.multiplier * index), "jpg")
-            save_dir = "{}{}-{}.{}".format(save_dir, filename, str(AugmentDataset.multiplier * index), "jpg")
+            save_dir = "{}/{}-{}.{}".format(save_dir, filename, str(AugmentDataset.multiplier * index), "jpg")
             _img_ = AugmentDataset.draw_boxes(augmented_images[index], augmented_boxes[index].bounding_boxes, classes)
             cv2.imwrite(save_dir, _img_)
         AugmentDataset.multiplier += 1
-
-
-def __main__():
-    image_dir = "/Users/siddiqui/Documents/Projects/tensorflow/models/research/krones/dataset_3/train/images"
-    filenames = glob.glob(image_dir + "/*.jpg")
-    full_labels = pd.read_csv('../data/train_3.csv')
-    full_labels.head()
-    ia.seed(1)
-    AugmentDataset.save_extra_orientation_augmentations(filenames, full_labels)
-
-
-# __main__()

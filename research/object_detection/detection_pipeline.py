@@ -18,8 +18,10 @@ Usage:
 
 flags = tf.app.flags
 flags.DEFINE_string('CKPT_NUMBER', '', 'Checkpoint number for frozen graph')
+flags.DEFINE_string('folder', '', 'Test Folder')
 FLAGS = flags.FLAGS
 
+HIDE_BOXES = True
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
 
@@ -97,16 +99,25 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
     # Actual detection
     (boxes, scores, classes, num) = sess.run([detection_boxes, detection_scores, detection_classes, num_detections],
                                              feed_dict={image_tensor: image_np_expanded})
-
     # Visualization of the results of a detection.
-    vis_util.visualize_boxes_and_labels_on_image_array(
-        image_np,
-        np.squeeze(boxes),
-        np.squeeze(classes).astype(np.int32),
-        np.squeeze(scores),
-        category_index,
-        use_normalized_coordinates=True,
-        line_thickness=8)
+    if HIDE_BOXES:
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        for box, score, cls in zip(np.squeeze(boxes), np.squeeze(scores), np.squeeze(classes).astype(np.int32)):
+            if score > 0.10:
+                ymin, xmin, ymax, xmax = box.tolist()
+                x_mid, y_mid = int((xmin + xmax) * image_np.shape[1] / 2), int((ymin + ymax) * image_np.shape[0] / 2)
+                clr = (0, 0, 255) if cls == 1 else (0, 255, 0)
+                scr = "{:0.1f}%".format(score * 100)
+                image_np = cv2.putText(image_np, scr, (x_mid, y_mid), font, 0.5, clr, 2, cv2.LINE_AA)
+    else:
+        vis_util.visualize_boxes_and_labels_on_image_array(
+            image_np,
+            np.squeeze(boxes),
+            np.squeeze(classes).astype(np.int32),
+            np.squeeze(scores),
+            category_index,
+            use_normalized_coordinates=True,
+            line_thickness=8)
 
     return image_np
 
@@ -129,7 +140,7 @@ def worker(input_q, output_q, path_to_check_point, xy_boundary, category_index, 
         output_q.put(detect_object(frame, sess, detection_graph, xy_boundary, category_index, scale_factor))
 
 
-def handle_queues(input_q, output_q, input_frame):
+def handle_queues(input_q, output_q, input_frame, image_name):
     # start time
     t_start = t.time()
     # put frame in queue`
@@ -138,10 +149,9 @@ def handle_queues(input_q, output_q, input_frame):
     output_frame = output_q.get()
     # start time
     t_end = t.time()
-    print("time (ms): {:0.2f}".format((t_end - t_start) * 1000))
+    print("IMG: {} | TIME: {:0.2f}".format(image_name, (t_end - t_start) * 1000))
     # visualization (matplotlib is very slow)
-    cv2.imshow("detection using CKPT_NUMBER=" + FLAGS.CKPT_NUMBER, output_frame)
-    cv2.waitKey(1)
+    cv2.imshow("CKPT={}".format(FLAGS.CKPT_NUMBER), output_frame)
 
 
 def __main__():
@@ -158,7 +168,7 @@ def __main__():
     path_to_test = {
         "root": "object_detection/test_images/",
         "pet": 'object_detection/test_images/pet-bottles/',
-        "krones": "object_detection/test_images/krones_test_dataset_5/"
+        "krones": "object_detection/test_images/" + FLAGS.folder
     }
 
     # Path to frozen detection graph. This is the actual model that is used for the object detection.
@@ -198,7 +208,6 @@ def __main__():
     # test images
     image_paths = [name for name in glob.glob(path_to_test["krones"] + '*')]
 
-    # image_paths = [os.path.join(path_to_test["root"], 'raccoon-{}.jpg'.format(i)) for i in range(184, 187)]
     label_map = label_map_util.load_labelmap(path_to_labels)
     categories = label_map_util.convert_label_map_to_categories(label_map,
                                                                 max_num_classes=num_classes,
@@ -219,9 +228,9 @@ def __main__():
     # for images
     if use_image:
         for image_path in image_paths:
-            print("image: ", image_path)
+            image_name = image_path.rsplit('/', 1)[-1]
             if os.path.isfile(image_path):
-                handle_queues(input_q, output_q, cv2.imread(image_path))
+                handle_queues(input_q, output_q, cv2.imread(image_path), image_name)
                 cv2.waitKey(0)
 
     # for video
