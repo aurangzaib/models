@@ -1,22 +1,28 @@
 
 ### STEPS
 
-1-Capture images
+1- Capture images
 
-2-Resize to 640x480
+2- Resize to 640x480
 
-3-Convert from BMP to JPG
+3- Convert from BMP to JPG
 
-4-Annotations using LabelImg
+4- Annotations using LabelImg
 
-5-Generate CSV from XML files
+5- Generate CSV from XML files
 
-6-Generate TFRecord file
-7-Verify annotations using LabelImg
+6- Generate TFRecord file
 
-8-Upload TFRecord, frozen weights and pipeline config file to GCML
+7- Verify annotations using LabelImg
 
-9-Run training on GCML
+8- Upload on GCML:
+    
+    TFRecord
+    Frozen weights
+    Checkpoint
+    Pipeline config file
+
+9- Run training on GCML
 
 #### EPOCHS
 

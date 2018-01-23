@@ -5,23 +5,25 @@ import imgaug as ia
 import numpy as np
 from imgaug import augmenters as iaa
 
-# possible augmentations
-orientations = [90, 180, 270]
-# angle from 15 to 345 with 15 degrees interval
-extra_orientations = [angle for angle in range(0, 375, 15)]
-brightnesses = [0.30, 0.60, 0.90, 1.20, 1.50, 1.80]
-scales = [0.6, 0.8, 1.2, 1.5]
-# window labels for visualization
-window_labels = [
-    "angle 90", "angle 180", "angle 270",
-    "brightness 0.30", "brightness 0.60", "brightness 0.90",
-    "brightness 1.20", "brightness 1.50", "brightness 1.80",
-    "scale 0.4", "scale 0.6", "scale 0.8",
-]
-extra_labels = ["orientation-" + str(_) for _ in extra_orientations]
-
 
 class AugmentDataset:
+    # possible augmentations
+    orientations = [90, 180, 270]
+    scales = np.arange(0.60, 2.0, 0.20)
+    brightnesses = np.arange(0.20, 1.80, 0.20)
+    window_labels = [
+        "angle 90", "angle 180", "angle 270",
+        "brightness 0.30", "brightness 0.60", "brightness 0.90",
+        "brightness 1.20", "brightness 1.50", "brightness 1.80",
+        "scale 0.4", "scale 0.6", "scale 0.8",
+    ]
+
+    # augmentation hyper-parameters
+    orientations_range = np.arange(0, 365, 5)
+    brightnesses_range = (0.20, 1.80)
+    scales_range = (0.60, 1.0)
+    labels_range = ["orientation-" + str(_) for _ in orientations_range]
+
     # image increment variable
     multiplier = 1
 
@@ -36,6 +38,16 @@ class AugmentDataset:
         selected_value = full_labels[full_labels.filename == image_name]
         ss = selected_value.iterrows()
         return [ia.BoundingBox(row['xmin'], row['ymin'], row['xmax'], row['ymax']) for index, row in ss]
+
+    @staticmethod
+    def get_random_scale():
+        return float("{:0.5f}".format(uniform(AugmentDataset.scales_range[0],
+                                              AugmentDataset.scales_range[1])))
+
+    @staticmethod
+    def get_random_brightness():
+        return float("{:0.5f}".format(uniform(AugmentDataset.brightnesses_range[0],
+                                              AugmentDataset.brightnesses_range[1])))
 
     @staticmethod
     def draw_boxes(img, bboxes, classes):
@@ -67,15 +79,15 @@ class AugmentDataset:
         recursively means for each orientation augmentation, perform scale and brightness augmentation too
         """
         # orientation augmentations
-        for _ in orientations:
+        for _ in AugmentDataset.orientations:
             # first stage augmentation
             ag, bbx = AugmentDataset.augment_orientation(image, bbs, _)
             augmented_images.append(ag), augmented_boxes.append(bbx)
             # second stage augmentation
-            for __ in brightnesses:
+            for __ in AugmentDataset.brightnesses:
                 ag2, bbx2 = AugmentDataset.augment_brightness(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
-            for __ in scales:
+            for __ in AugmentDataset.scales:
                 ag2, bbx2 = AugmentDataset.augment_brightness(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
         # return appended results
@@ -101,14 +113,14 @@ class AugmentDataset:
         recursively means for each brightness augmentation, perform scale and orientation augmentation too
         """
         # first stage augmentation
-        for _ in brightnesses:
+        for _ in AugmentDataset.brightnesses:
             ag, bbx = AugmentDataset.augment_brightness(image, bbs, _)
             augmented_images.append(ag), augmented_boxes.append(bbx)
             # second stage augmentation
-            for __ in orientations:
+            for __ in AugmentDataset.orientations:
                 ag2, bbx2 = AugmentDataset.augment_orientation(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
-            for __ in scales:
+            for __ in AugmentDataset.scales:
                 ag2, bbx2 = AugmentDataset.augment_scale(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
         # return image and bounding boxes
@@ -135,14 +147,14 @@ class AugmentDataset:
         recursively means for each scale augmentation, perform brightness and orientation augmentation too
         """
         # first stage augmentation
-        for _ in scales:
+        for _ in AugmentDataset.scales:
             ag, bbx = AugmentDataset.augment_scale(image, bbs, _)
             augmented_images.append(ag), augmented_boxes.append(bbx)
             # second stage augmentation
-            for __ in orientations:
+            for __ in AugmentDataset.orientations:
                 ag2, bbx2 = AugmentDataset.augment_orientation(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
-            for __ in brightnesses:
+            for __ in AugmentDataset.brightnesses:
                 ag2, bbx2 = AugmentDataset.augment_brightness(ag, bbx, __)
                 augmented_images.append(ag2), augmented_boxes.append(bbx2)
         # return image and bounding boxes
@@ -178,10 +190,10 @@ class AugmentDataset:
                                                                                    augmented_images,
                                                                                    augmented_boxes)
         # augmentations and their bounding boxes for the original image
-        return augmented_images, augmented_boxes, window_labels
+        return augmented_images, augmented_boxes, AugmentDataset.window_labels
 
     @staticmethod
-    def create_extra_orientation_augmentations(filename, image_dir, full_labels):
+    def create_augmentations(filename, image_dir, full_labels):
         """
         perform angles from 15 to 345 orientations augmentation
         this is to cover all directions of fallen bottles
@@ -197,21 +209,21 @@ class AugmentDataset:
         # augmentation containers
         augmented_images, augmented_boxes = [], []
         # orientation augmentation
-        for _ in extra_orientations:
+        for _ in AugmentDataset.orientations_range:
             # random scale augmentation
-            scale = float("{:0.5f}".format(uniform(0.6, 1.0)))
+            scale = AugmentDataset.get_random_scale()
             ag2, bbs2 = AugmentDataset.augment_scale(image, bbs, scale)
             # random brightness augmentation
-            brightness = float("{:0.5f}".format(uniform(0.2, 1.5)))
+            brightness = AugmentDataset.get_random_brightness()
             ag2, bbs2 = AugmentDataset.augment_brightness(ag2, bbs2, brightness)
             # orientation augmentation
             ag2, bbs2 = AugmentDataset.augment_orientation(ag2, bbs2, _)
             # append images and bounding boxes
             augmented_images.append(ag2), augmented_boxes.append(bbs2)
-        return augmented_images, augmented_boxes, extra_labels
+        return augmented_images, augmented_boxes, AugmentDataset.labels_range
 
     @staticmethod
-    def save_extra_orientation_augmentations(filenames, full_labels, image_dir):
+    def save_augmentations(filenames, full_labels, image_dir):
         """
         perform angles from 15 to 345 orientations augmentation
         this is to cover all directions of fallen bottles
@@ -225,20 +237,21 @@ class AugmentDataset:
             image_name = filename.rsplit('/', 1)[-1]
             # skip temporary debugging files
             if ("tmp.jpg" in image_name) is False:
-                print("-> {}".format(image_name))
+                print("\n-> {}".format(image_name))
                 # bounding box for the original image
                 bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
                 image_name = image_name.rsplit('.', 1)[0]
                 # classes
                 classes = AugmentDataset.get_classes(filename.rsplit('/', 1)[-1], full_labels)
-                for _ in extra_orientations:
+                for _ in AugmentDataset.orientations_range:
                     # orientation augmentation
                     ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
                     # random scale augmentation
-                    scale = float("{:0.1f}".format(uniform(0.6, 1.0)))
+                    scale = AugmentDataset.get_random_scale()
+                    print(scale),
                     ag2, bbs2 = AugmentDataset.augment_scale(ag2, bbs2, scale)
                     # random brightness augmentation
-                    brightness = float("{:0.1f}".format(uniform(0.3, 1.5)))
+                    brightness = AugmentDataset.get_random_brightness()
                     ag2, bbs2 = AugmentDataset.augment_brightness(ag2, bbs2, brightness)
                     # draw boxes for debugging
                     ag2 = AugmentDataset.draw_boxes(ag2, bbs2.bounding_boxes, classes)
@@ -248,21 +261,23 @@ class AugmentDataset:
                     cv2.imwrite(aug_image_name, ag2)
 
     @staticmethod
-    def assert_extra_orientation_augmentations(filenames, full_labels, image_dir):
+    def assert_augmentations(filenames, full_labels):
         """
         assert the scale augmentation
         """
-        for filename in filenames:
-            image = cv2.imread(filename)
-            image_name = filename.rsplit('/', 1)[-1]
-            # skip temporary debugging files
-            if ("tmp.jpg" in image_name) is False:
+        for index in range(0, 10):
+            for filename in filenames:
+                image = cv2.imread(filename)
+                image_name = filename.rsplit('/', 1)[-1]
+                # skip temporary debugging files
+                if ("tmp.jpg" in image_name) is True:
+                    continue
                 print("-> {}".format(image_name))
                 # bounding box for the original image
                 bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
-                for _ in extra_orientations:
+                for _ in AugmentDataset.orientations_range:
                     # random scale augmentation
-                    scale = float("{:0.1f}".format(uniform(0.2, 2.0)))
+                    scale = AugmentDataset.get_random_scale()
                     AugmentDataset.augment_scale(image, bbs, scale)
 
     @staticmethod
@@ -288,7 +303,7 @@ class AugmentDataset:
             cv2.waitKey()
 
     @staticmethod
-    def save_augmentations(augmented_images, augmented_boxes, filename, classes, img_dir):
+    def save_annotations(augmented_images, augmented_boxes, filename, classes, img_dir):
         count = len(augmented_images)
         save_dir = "{}_annotated".format(img_dir)
         # remove extension

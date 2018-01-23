@@ -21,15 +21,14 @@ flags.DEFINE_string('CKPT_NUMBER', '', 'Checkpoint number for frozen graph')
 flags.DEFINE_string('folder', '', 'Test Folder')
 FLAGS = flags.FLAGS
 
+# global variable
+SHOULD_OPTIMIZE = False
 HIDE_BOXES = True
 # This is needed since the notebook is stored in the object_detection folder.
 sys.path.append("..")
 
 from utils import label_map_util
 from utils import visualization_utils as vis_util
-
-# global variable
-should_optimize = False
 
 
 def optimize_image(img, x_boundary, y_boundary, scale_factor):
@@ -81,7 +80,7 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
     # Definite input and output Tensors for detection_graph
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-    if should_optimize:
+    if SHOULD_OPTIMIZE:
         image_np = optimize_image(image_np, xy_boundary[0], xy_boundary[1], scale_factor)
     image_np_expanded = np.expand_dims(image_np, axis=0)
     # Each box represents a part of the image where a particular object was detected.
@@ -118,7 +117,8 @@ def annotate_object(image_np, boxes, scores, classes, category_index):
             np.squeeze(scores),
             category_index,
             use_normalized_coordinates=True,
-            line_thickness=8)
+            line_thickness=8,
+            min_score_thresh=0.20)
     return image_np
 
 

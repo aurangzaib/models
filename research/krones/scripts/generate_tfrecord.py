@@ -25,8 +25,8 @@ flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
 # record and visualization flags
-SAVE_RECORD, SAVE_AUGMENTED_RECORD = False, False
-ASSERT_AUGMENTED_IMAGES, SAVE_AUGMENTED_IMAGES = False, True
+SAVE_RECORD, SAVE_AUGMENTED_RECORD = True, True
+SAVE_AUGMENTED_IMAGES, ASSERT_AUGMENTED_IMAGES, = False, False
 SHOW_VISUALIZATION = False
 
 """
@@ -196,9 +196,9 @@ class GenerateTFRecord:
             writer.write(tf_example.SerializeToString())
             if SAVE_AUGMENTED_RECORD:
                 # augment dataset
-                ag_img, ag_bbx, w_lb = AugmentDataset.create_extra_orientation_augmentations(filename,
-                                                                                             image_dir,
-                                                                                             full_labels)
+                ag_img, ag_bbx, w_lb = AugmentDataset.create_augmentations(filename,
+                                                                           image_dir,
+                                                                           full_labels)
                 # generate augmentations of the image
                 for img, bbx, lb in zip(ag_img, ag_bbx, w_lb):
                     # create augmented tf_record
@@ -219,14 +219,14 @@ class GenerateTFRecord:
         filenames = glob.glob(image_dir + "/*.jpg")
         ia.seed(1)
         print("save augmented dataset is active")
-        AugmentDataset.save_extra_orientation_augmentations(filenames, full_labels, image_dir)
+        AugmentDataset.save_augmentations(filenames, full_labels, image_dir)
 
     @staticmethod
     def assert_augmented_dataset(image_dir, full_labels):
         filenames = glob.glob(image_dir + "/*.jpg")
         ia.seed(1)
         print("save augmented dataset is active")
-        AugmentDataset.assert_extra_orientation_augmentations(filenames, full_labels, image_dir)
+        AugmentDataset.assert_augmentations(filenames, full_labels)
 
     @staticmethod
     def viz_augmented_dataset(image_dir, grouped, full_labels):
@@ -235,7 +235,7 @@ class GenerateTFRecord:
             filename = group.filename.encode('utf8')
             classes = AugmentDataset.get_classes(filename, full_labels)
             ag_img, ag_bbx, w_lb = AugmentDataset.create_recursive_augmentations(filename, image_dir, full_labels)
-            AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes)
+            AugmentDataset.viz_augmentations(ag_img, ag_bbx, classes, w_lb)
 
 
 def main(_):
