@@ -20,8 +20,8 @@ class AugmentDataset:
 
     # augmentation hyper-parameters
     orientations_range = np.arange(0, 365, 5)
-    brightnesses_range = (0.20, 1.80)
-    scales_range = (0.60, 1.0)
+    brightnesses_range = (0.20, 1.50)
+    scales_range = (0.6, 1.0)
     labels_range = ["orientation-" + str(_) for _ in orientations_range]
 
     # image increment variable
@@ -41,12 +41,12 @@ class AugmentDataset:
 
     @staticmethod
     def get_random_scale():
-        return float("{:0.5f}".format(uniform(AugmentDataset.scales_range[0],
+        return float("{:0.1f}".format(uniform(AugmentDataset.scales_range[0],
                                               AugmentDataset.scales_range[1])))
 
     @staticmethod
     def get_random_brightness():
-        return float("{:0.5f}".format(uniform(AugmentDataset.brightnesses_range[0],
+        return float("{:0.1f}".format(uniform(AugmentDataset.brightnesses_range[0],
                                               AugmentDataset.brightnesses_range[1])))
 
     @staticmethod
@@ -237,7 +237,7 @@ class AugmentDataset:
             image_name = filename.rsplit('/', 1)[-1]
             # skip temporary debugging files
             if ("tmp.jpg" in image_name) is False:
-                print("\n-> {}".format(image_name))
+                print("-> {}".format(image_name))
                 # bounding box for the original image
                 bbs = ia.BoundingBoxesOnImage(AugmentDataset.get_boxes(image_name, full_labels), shape=image.shape)
                 image_name = image_name.rsplit('.', 1)[0]
@@ -248,7 +248,6 @@ class AugmentDataset:
                     ag2, bbs2 = AugmentDataset.augment_orientation(image, bbs, _)
                     # random scale augmentation
                     scale = AugmentDataset.get_random_scale()
-                    print(scale),
                     ag2, bbs2 = AugmentDataset.augment_scale(ag2, bbs2, scale)
                     # random brightness augmentation
                     brightness = AugmentDataset.get_random_brightness()

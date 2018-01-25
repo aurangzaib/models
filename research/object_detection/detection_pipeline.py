@@ -100,15 +100,17 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
 
 
 def annotate_object(image_np, boxes, scores, classes, category_index):
+    marker_size, marker_thickness, radius = 15, 4, 3
     if HIDE_BOXES:
         font = cv2.FONT_HERSHEY_SIMPLEX
         for box, score, cls in zip(np.squeeze(boxes), np.squeeze(scores), np.squeeze(classes).astype(np.int32)):
-            if score > 0.10:
+            if score > 0.20:
                 ymin, xmin, ymax, xmax = box.tolist()
                 x_mid, y_mid = int((xmin + xmax) * image_np.shape[1] / 2), int((ymin + ymax) * image_np.shape[0] / 2)
                 clr = (0, 0, 255) if cls == 1 else (0, 255, 0)
                 scr = "{:0.1f}%".format(score * 100)
-                image_np = cv2.putText(image_np, scr, (x_mid, y_mid), font, 0.5, clr, 2, cv2.LINE_AA)
+                cv2.circle(image_np, (x_mid, y_mid), radius, clr, marker_thickness)
+                # image_np = cv2.putText(image_np, scr, (x_mid, y_mid), font, 0.4, clr, 1, cv2.LINE_AA)
     else:
         vis_util.visualize_boxes_and_labels_on_image_array(
             image_np,

@@ -25,8 +25,8 @@ flags.DEFINE_string('output', '', 'Name of TFRecord file')
 FLAGS = flags.FLAGS
 
 # record and visualization flags
-SAVE_RECORD, SAVE_AUGMENTED_RECORD = True, True
-SAVE_AUGMENTED_IMAGES, ASSERT_AUGMENTED_IMAGES, = False, False
+SAVE_RECORD, SAVE_AUGMENTED_RECORD = False, False
+SAVE_AUGMENTED_IMAGES, ASSERT_AUGMENTED_IMAGES, = True, False
 SHOW_VISUALIZATION = False
 
 """
