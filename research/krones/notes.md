@@ -8,16 +8,9 @@
     - Training on **single dataset** multiple times in small steps using checkpoints
     - Training on **multiple datasets** each with complete round (10 >)
 
-- Whenever training on a new dataset, it is very important to also provide old dataset. Otherwise, CNN will ignore features learnt from old dataset.
+- Whenever training on a new dataset, it is very important to also provide old dataset. This way CNN forms the relation between both datasets and remembers common features in both. 
 
-- When combination of old and new dataset is provided, CNN forms the relation between both datasets and remembers common features in both
-
-
-## Issues
-
-- Tensorflow re-learning seems to keep forgetting features from previous training
-
-- Populated training seems to causing the failure of GCML training
+- When CNN is trained on new dataset withtout mixing old dataset, it will ignore features learnt from old dataset.
 
 
 ## Ideas
@@ -26,22 +19,21 @@
 	- Does this variation occur in real world?
 	- Does this variation help to reduce overfit i.e reduce network wrong attributes association with fallen and standing bottles?
 
-- Perform data augmentation to get orientation from 0 to 360 degrees with 15 degrees step-size
+- Perform data augmentation to get orientation from 0 to 360 degrees with 5 degrees step-size
 
 - Get images on **different backgrounds** to remove background bias:
 	- Different color of conveyor belt
-	- White background color
+	- Different background color without conveyor belt
 
 - Get dataset of combination of bottles to **remove size and color bias**:
 	- 0.5, 1.0, 1.5 and 2.0 litres bottles
 	- Dark (Coke) and transparent (water) bottles
 	- With and without labels
+	- Damaged labels
 
 - Augmentation with **Additive Gaussian Noise**
 
 - Fallen PET bottles images from Google:
 	- All bottles against the wall can be used as fallen bottles
 	- This will provide background unbiasing for fallen bottles
-	- This provide samples for Coke, Sprite, Nestle etc
-	- Metal Cans can be trained along with bottles 	
-- When we train on new dataset using checkpoints, it's important that the new dataset is balanced in classes and is not completely different from previous datasets
+	- Metal Cans can be trained along with bottles
