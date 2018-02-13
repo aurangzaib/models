@@ -71,7 +71,7 @@ def optimize_image(img, x_boundary, y_boundary, scale_factor):
     return img
 
 
-def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, scale_factor):
+def detect_object(img_np, sess, detection_graph, xy_boundary, category_index, scale_factor):
     """
     get optimized image
     detect bounding boxes with scores
@@ -80,9 +80,8 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
     # Definite input and output Tensors for detection_graph
     image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
     # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-    if SHOULD_OPTIMIZE:
-        image_np = optimize_image(image_np, xy_boundary[0], xy_boundary[1], scale_factor)
-    image_np_expanded = np.expand_dims(image_np, axis=0)
+    img_np = optimize_image(img_np, xy_boundary[0], xy_boundary[1], scale_factor) if SHOULD_OPTIMIZE else img_np
+    img_np_expanded = np.expand_dims(img_np, axis=0)
     # Each box represents a part of the image where a particular object was detected.
     detection_boxes = detection_graph.get_tensor_by_name('detection_boxes:0')
     # Each score represent how level of confidence for each of the objects.
@@ -92,11 +91,11 @@ def detect_object(image_np, sess, detection_graph, xy_boundary, category_index, 
     num_detections = detection_graph.get_tensor_by_name('num_detections:0')
     # Actual detection
     (boxes, scores, classes, num) = sess.run([detection_boxes, detection_scores, detection_classes, num_detections],
-                                             feed_dict={image_tensor: image_np_expanded})
+                                             feed_dict={image_tensor: img_np_expanded})
     # Visualization of the results of a detection.
-    annotate_object(image_np, boxes, scores, classes, category_index)
+    annotate_object(img_np, boxes, scores, classes, category_index)
     # return annotated image
-    return image_np
+    return img_np
 
 
 def annotate_object(image_np, boxes, scores, classes, category_index):
@@ -109,8 +108,8 @@ def annotate_object(image_np, boxes, scores, classes, category_index):
                 x_mid, y_mid = int((xmin + xmax) * image_np.shape[1] / 2), int((ymin + ymax) * image_np.shape[0] / 2)
                 clr = (0, 0, 255) if cls == 1 else (0, 255, 0)
                 scr = "{:0.1f}%".format(score * 100)
-                cv2.circle(image_np, (x_mid, y_mid), radius, clr, marker_thickness)
-                # image_np = cv2.putText(image_np, scr, (x_mid, y_mid), font, 0.4, clr, 1, cv2.LINE_AA)
+                cv2.circle(image_np, (x_mid - 8, y_mid), radius, clr, marker_thickness)
+                image_np = cv2.putText(image_np, scr, (x_mid, y_mid), font, 0.4, clr, 1, cv2.LINE_AA)
     else:
         vis_util.visualize_boxes_and_labels_on_image_array(
             image_np,
